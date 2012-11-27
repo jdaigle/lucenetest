@@ -36,7 +36,7 @@ namespace LuceneIndexPrototype
         protected readonly IndexDefinitionFieldHelper indexDefinitionFieldHelper;
         private readonly string name;
         private Directory directory;
-        private IndexWriter indexWriter;
+        public IndexWriter indexWriter;
         private readonly object writeLock = new object();
         private volatile string waitReason;
         private volatile bool disposed;
