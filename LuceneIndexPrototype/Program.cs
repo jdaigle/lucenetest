@@ -4,8 +4,11 @@ using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Lucene.Net.Analysis;
 using Lucene.Net.Index;
+using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
 
 namespace LuceneIndexPrototype
@@ -42,63 +45,119 @@ namespace LuceneIndexPrototype
             var storage = new IndexStorage();
             var visitIndex = storage.OpenIndexOnStartup(visitIndexDef);
 
-            var stopwatch = new Stopwatch();
-            long totalCount = 0;
-            long totalEllapsed = 0;
-            using (var conn = new SqlConnection("server=cw-sit2-platdb.cw.local;database=providerportal;user id=cwdev;password=M5DrECr!c$"))
+            Task.Factory.StartNew(() =>
             {
-                conn.Open();
-                using (var cmd = conn.CreateCommand())
-                {
-                    var row = new object[17];
-                    var doc = new VisitIndexableDocument(row);
-                    var uid_encounter = Guid.Empty;
-                    cmd.CommandText = visitQuery;
-                    cmd.Parameters.AddWithValue("@uid_encounter", uid_encounter);
-                    while (true)
+                var stopwatch = new Stopwatch();
+                long totalCount = 0;
+                long totalEllapsed = 0;
+                using (var conn = new SqlConnection("server=cw-sit2-platdb.cw.local;database=providerportal;user id=cwdev;password=M5DrECr!c$"))                {
+                    conn.Open();
+                    using (var cmd = conn.CreateCommand())
                     {
-                        cmd.Parameters["@uid_encounter"].Value = uid_encounter;
-                        using (var reader = cmd.ExecuteReader())
+                        var row = new object[17];
+                        var doc = new VisitIndexableDocument(row);
+                        var uid_encounter = Guid.Empty;
+                        cmd.CommandText = visitQuery;
+                        cmd.Parameters.AddWithValue("@uid_encounter", uid_encounter);
+                        while (true)
                         {
-                            int batchCount = 0;
-                            if (!reader.HasRows)
+                            cmd.Parameters["@uid_encounter"].Value = uid_encounter;
+                            using (var reader = cmd.ExecuteReader())
                             {
-                                break;
+                                int batchCount = 0;
+                                if (!reader.HasRows)
+                                {
+                                    break;
+                                }
+                                var documents = AsEnumerable(reader.Read, () =>
+                                {
+                                    totalCount++;
+                                    batchCount++;
+                                    uid_encounter = reader.GetGuid(0);
+                                    reader.GetValues(row);
+                                    return doc;
+                                });
+                                stopwatch.Restart();
+                                visitIndex.IndexDocuments(documents);
+                                stopwatch.Stop();
+                                totalEllapsed += stopwatch.ElapsedMilliseconds;
+                                Console.WriteLine(string.Format("Last Batch {0}/{1} = {2} : Overall {3}/{4} = {5}", batchCount, stopwatch.ElapsedMilliseconds, (double)batchCount / (double)stopwatch.ElapsedMilliseconds, totalCount, totalEllapsed, (double)totalCount / (double)totalEllapsed));
+                                Thread.Sleep(100);
                             }
-                            var documents = AsEnumerable(reader.Read, () =>
-                            {
-                                totalCount++;
-                                batchCount++;
-                                uid_encounter = reader.GetGuid(0);
-                                reader.GetValues(row);
-                                return doc;
-                            });
-                            stopwatch.Restart();
-                            visitIndex.IndexDocuments(documents);
-                            stopwatch.Stop();
-                            totalEllapsed += stopwatch.ElapsedMilliseconds;
-                            Console.WriteLine(string.Format("Last Batch {0}/{1} = {2} : Overall {3}/{4} = {5}", batchCount, stopwatch.ElapsedMilliseconds, (double)batchCount / (double)stopwatch.ElapsedMilliseconds, totalCount, totalEllapsed, (double)totalCount / (double)totalEllapsed));
                         }
                     }
                 }
+            });
+
+            int start = 0;
+            int pageSize = 50;
+            var sort = new Sort(new SortField("VisitDateTime_Range", SortField.LONG));
+            //var sort = new Sort(new SortField("VisitDateTime_Range",System.Globalization.CultureInfo.InvariantCulture));
+            BooleanQuery luceneQuery = null;
+
+            var query = new BooleanQuery();
+            query.Add(new TermQuery(new Term("ProviderOrganizationGuid", new Guid("E80948C3-6785-4C22-B9BE-624EF5F5EF7D").ToString().ToLower())), Occur.MUST);
+            query.Add(new TermQuery(new Term("ProviderLocationGuid", new Guid("5685401C-1B79-4085-8583-0E0461B583FE").ToString().ToLower())), Occur.MUST);
+            query.Add(NumericRangeQuery.NewLongRange("VisitDateTime_Range", new DateTime(2009, 11, 18).Ticks, new DateTime(2009, 12, 18).Ticks, true, true), Occur.MUST);
+
+            var query2 = new BooleanQuery();
+            query2.Add(new TermQuery(new Term("ProviderOrganizationGuid", new Guid("69212B81-060C-435D-8B5F-509F2064335F").ToString().ToLower())), Occur.MUST);
+            query2.Add(new TermQuery(new Term("ProviderLocationGuid", new Guid("C371ADCF-ED86-4693-BEEB-EC7A63FD9F84").ToString().ToLower())), Occur.MUST);
+            query2.Add(NumericRangeQuery.NewLongRange("VisitDateTime_Range", new DateTime(2009, 11, 18).Ticks, new DateTime(2009, 12, 18).Ticks, true, true), Occur.MUST);
+
+            luceneQuery = new BooleanQuery();
+            luceneQuery.Add(query, Occur.SHOULD);
+            luceneQuery.Add(query2, Occur.SHOULD);
+
+            //string queryText = null;
+            ////logQuerying.Debug("Building query on index {0} for: {1}", parent.name, query);
+            //var toDispose = new List<Action>();
+            //PerFieldAnalyzerWrapper searchAnalyzer = null;
+            //try
+            //{
+            //    searchAnalyzer = visitIndex.CreateAnalyzer(new LowerCaseKeywordAnalyzer(), toDispose, true);
+            //    var queryParser = new RangeQueryParser(Lucene.Net.Util.Version.LUCENE_30, string.Empty, searchAnalyzer)
+            //    {
+            //        AllowLeadingWildcard = true
+            //    };
+            //}
+            //finally
+            //{
+            //    if (searchAnalyzer != null)
+            //        searchAnalyzer.Close();
+            //    foreach (Action dispose in toDispose)
+            //    {
+            //        dispose();
+            //    }
+            //    toDispose.Clear();
+            //}
+
+            while (true)
+            {
+                var stopwatch = new Stopwatch();
+                //TopFieldDocs ret = null;
+                TopDocs ret = null;
+                IndexSearcher indexSearcher;
+                stopwatch.Start();
+                using (visitIndex.GetSearcher(out indexSearcher))
+                {
+                    var minPageSize = Math.Max(pageSize + start, 1);
+
+                    try
+                    {
+                        //indexSearcher.SetDefaultFieldSortScoring(true, false);
+                        //ret = indexSearcher.Search(luceneQuery, null, minPageSize, sort);
+                        ret = indexSearcher.Search(luceneQuery, null, minPageSize);
+                    }
+                    finally
+                    {
+                        indexSearcher.SetDefaultFieldSortScoring(false, false);
+                    }
+                }
+                stopwatch.Stop();
+                Console.WriteLine(stopwatch.ElapsedMilliseconds);
+                Thread.Sleep(100);
             }
-
-            //var docs = new List<IndexableDocument>();
-            //for (int i = 0; i < 100; i++)
-            //{
-            //    docs.AddRange(new[] { 
-            //    new IndexableDocument() { DocumentId = i.ToString(), Fields = { { "LastName", "Daigle" }, 
-            //                                                                {"FirstName" ,"Joseph" } } },
-            //    });
-            //}
-            //for (int i = 0; i < 100; i++)
-            //{
-            //    visitIndex.IndexDocuments(docs);
-            //}
-            //visitIndex.Flush();
-
-
-
 
             //visitIndex.MergeSegments();
             //var reader = visitIndex.indexWriter.GetReader();

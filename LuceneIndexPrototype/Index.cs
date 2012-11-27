@@ -36,23 +36,24 @@ namespace LuceneIndexPrototype
         protected readonly IndexDefinitionFieldCache indexDefinitionFieldHelper;
         private readonly string name;
         private Directory directory;
-        public IndexWriter indexWriter;
+        private IndexWriter indexWriter;
         private readonly object writeLock = new object();
         private volatile string waitReason;
         private volatile bool disposed;
         private int docCountSinceLastOptimization;
+        private readonly IndexSearcherHolder currentIndexSearcherHolder = new IndexSearcherHolder();
 
         private void RecreateSearcher()
         {
-            //if (indexWriter == null)
-            //{
-            //    currentIndexSearcherHolder.SetIndexSearcher(new IndexSearcher(directory, true));
-            //}
-            //else
-            //{
-            //    var indexReader = indexWriter.GetReader();
-            //    currentIndexSearcherHolder.SetIndexSearcher(new IndexSearcher(indexReader));
-            //}
+            if (indexWriter == null)
+            {
+                currentIndexSearcherHolder.SetIndexSearcher(new IndexSearcher(directory, true));
+            }
+            else
+            {
+                var indexReader = indexWriter.GetReader();
+                currentIndexSearcherHolder.SetIndexSearcher(new IndexSearcher(indexReader));
+            }
         }
 
         public void Dispose()
@@ -71,15 +72,15 @@ namespace LuceneIndexPrototype
                 }
 
                 disposed = true;
-                //if (currentIndexSearcherHolder != null)
-                //{
-                //    var item = currentIndexSearcherHolder.SetIndexSearcher(null);
-                //    if (item.WaitOne(TimeSpan.FromSeconds(5)) == false)
-                //    {
-                //        logIndexing.Warn("After closing the index searching, we waited for 5 seconds for the searching to be done, but it wasn't. Continuing with normal shutdown anyway.");
-                //        Console.Beep();
-                //    }
-                //}
+                if (currentIndexSearcherHolder != null)
+                {
+                    var item = currentIndexSearcherHolder.SetIndexSearcher(null);
+                    if (item.WaitOne(TimeSpan.FromSeconds(5)) == false)
+                    {
+                        logIndexing.Warn("After closing the index searching, we waited for 5 seconds for the searching to be done, but it wasn't. Continuing with normal shutdown anyway.");
+                        Console.Beep();
+                    }
+                }
 
                 if (indexWriter != null)
                 {
@@ -382,5 +383,9 @@ namespace LuceneIndexPrototype
             return indexWriter;
         }
 
+        public IDisposable GetSearcher(out IndexSearcher searcher)
+        {
+            return currentIndexSearcherHolder.GetSearcher(out searcher);
+        }
     }
 }
