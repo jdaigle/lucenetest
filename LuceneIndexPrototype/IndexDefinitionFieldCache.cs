@@ -7,9 +7,9 @@ using Lucene.Net.Documents;
 
 namespace LuceneIndexPrototype
 {
-    public class IndexDefinitionFieldHelper
+    public class IndexDefinitionFieldCache
     {
-        public IndexDefinitionFieldHelper(IndexDefinition indexDefinition)
+        public IndexDefinitionFieldCache(IndexDefinition indexDefinition)
         {
             this.indexDefinition = indexDefinition;
         }
@@ -209,8 +209,7 @@ namespace LuceneIndexPrototype
                 yield return numericField;
         }
 
-        private IEnumerable<AbstractField> CreateNumericFieldWithCaching(string name, object value,
-            Field.Store defaultStorage)
+        private IEnumerable<AbstractField> CreateNumericFieldWithCaching(string name, object value, Field.Store defaultStorage)
         {
             var fieldName = name + "_Range";
             var storage = indexDefinition.GetStorage(name, defaultStorage);
@@ -315,7 +314,7 @@ namespace LuceneIndexPrototype
             }
         }
 
-        private Field CreateFieldWithCaching(string name, string value, Field.Store store, Field.Index index)
+        public Field CreateFieldWithCaching(string name, string value, Field.Store store, Field.Index index)
         {
             var cacheKey = new FieldCacheKey(name, index, store, multipleItemsSameFieldCount.ToArray());
             Field field;
@@ -354,7 +353,7 @@ namespace LuceneIndexPrototype
             //return field;
         }
 
-        private bool CanCreateFieldsForNestedArray(object value, Field.Index fieldIndexingOptions)
+        private static bool CanCreateFieldsForNestedArray(object value, Field.Index fieldIndexingOptions)
         {
             if (!fieldIndexingOptions.IsAnalyzed())
             {

@@ -50,7 +50,7 @@
   <ItemGroup>
     <Compile Include="IndexableDocument.cs" />
     <Compile Include="ErrorLoggingConcurrentMergeScheduler.cs" />
-    <Compile Include="IndexDefinitionFieldHelper.cs" />
+    <Compile Include="IndexDefinitionFieldCache.cs" />
     <Compile Include="IndexStorage.cs" />
     <Compile Include="LowerCaseKeywordAnalyzer.cs" />
     <Compile Include="FieldIndexing.cs" />

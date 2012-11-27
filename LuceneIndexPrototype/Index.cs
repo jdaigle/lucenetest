@@ -25,7 +25,7 @@ namespace LuceneIndexPrototype
 
             this.name = indexDefinition.Name;
             this.indexDefinition = indexDefinition;
-            this.indexDefinitionFieldHelper = new IndexDefinitionFieldHelper(this.indexDefinition);
+            this.indexDefinitionFieldHelper = new IndexDefinitionFieldCache(this.indexDefinition);
             logIndexing.DebugFormat("Creating index for {0}", name);
             this.directory = directory;
 
@@ -33,7 +33,7 @@ namespace LuceneIndexPrototype
         }
 
         protected readonly IndexDefinition indexDefinition;
-        protected readonly IndexDefinitionFieldHelper indexDefinitionFieldHelper;
+        protected readonly IndexDefinitionFieldCache indexDefinitionFieldHelper;
         private readonly string name;
         private Directory directory;
         public IndexWriter indexWriter;
@@ -182,11 +182,11 @@ namespace LuceneIndexPrototype
                     luceneDoc.GetFields().Clear();
                     documentIdField.SetValue(doc.DocumentId.ToLowerInvariant());
                     luceneDoc.Add(documentIdField);
-                    foreach (var field in doc.Fields.SelectMany(x => this.indexDefinitionFieldHelper.CreateFields(x.Key, x.Value)))
+                    foreach (var field in doc.Fields().SelectMany(x => this.indexDefinitionFieldHelper.CreateFields(x.Key, x.Value)))
                     {
                         luceneDoc.Add(field);
                     }
-                    LogIndexedDocument(doc.DocumentId, luceneDoc);
+                    //LogIndexedDocument(doc.DocumentId, luceneDoc);
                     //indexWriter.AddDocument(luceneDoc, analyzer);
                     indexWriter.UpdateDocument(docIdTerm.CreateTerm(doc.DocumentId.ToLowerInvariant()), luceneDoc, analyzer);
                     Interlocked.Increment(ref stats.IndexingSuccesses);
